@@ -59,3 +59,6 @@ out/
 
 ### VS Code ###
 .vscode/
+
+src/main/resources/application-local.yml
+src/main/resources/schema.sql
