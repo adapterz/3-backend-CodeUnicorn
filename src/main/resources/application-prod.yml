@@ -5,3 +5,18 @@ spring:
         username: # 계정명
         password: # 비밀번호
         driver-class-name: com.mysql.cj.jdbc.Driver
+hibernate:
+    ejb:
+        naming_strategy: org.hibernate.cfg.ImprovedNamingStrategy
+cloud:
+    aws:
+        credentials:
+            accessKey: AKIAYZSNITCOEMFMLYB4
+            secretKey: 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
+        s3:
+            bucket: code-unicorn-service
+            dir: images
+        region:
+            static: ap-northeast-2
+        stack:
+            auto: false
