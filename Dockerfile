@@ -7,6 +7,6 @@ ARG JAR_FILE=build/libs/*.jar
 
 RUN echo ${JAR_FILE}
 
-COPY ${JAR_FILE} app.jar
+COPY ${JAR_FILE} codeUnicorn.jar
 
-ENTRYPOINT ["java", "-jar","/app.jar"]
+ENTRYPOINT ["java", "-jar","/codeUnicorn.jar"]
