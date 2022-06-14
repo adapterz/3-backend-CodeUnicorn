@@ -68,3 +68,5 @@ data class CourseInfo(
     @Column(name = "user_count")
     var userCount: Int?
 )
+
+
