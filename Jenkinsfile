@@ -57,6 +57,7 @@ pipeline {
             echo 'Bulid Docker'
             script {
             dir('../CodeUnicon'){
+            // 생성된 도커 이미지가 있으면 삭제 후 빌드, 아니면 그냥 빌드
             sh """#!/bin/bash
             if [ -z "docker images | grep xhfkd00/codeunicorn:1.0" ]; then
                docker build -t xhfkd00/codeunicorn:1.0 .
@@ -65,7 +66,7 @@ pipeline {
                docker build -t xhfkd00/codeunicorn:1.0 .
             fi
             """
-              }
+            }
 
             }
           }

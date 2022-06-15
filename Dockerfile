@@ -9,5 +9,4 @@ RUN echo ${JAR_FILE}
 
 COPY ${JAR_FILE} codeUnicorn.jar
 
-# 실행될 명령어
-ENTRYPOINT ["java", "-Dspring.profiles.active=prod" ,"-jar", "/codeUnicorn.jar"]
+ENTRYPOINT ["java","-Dspring.profiles.active=prod", "-jar","/codeUnicorn.jar"]
