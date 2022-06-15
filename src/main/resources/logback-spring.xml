@@ -23,7 +23,7 @@
         <!-- 로그 파일을 적재할 에러 로그 파일 이름을 지정 -->
         <property name="ERR_LOG_FILE_NAME" value="prod_error_log"/>
         <!-- 로그 레벨 지정 -->
-        <property name="LOG_LEVEL" value="WARN"/>
+        <property name="LOG_LEVEL" value="INFO"/>
     </springProfile>
 
     <property name="LOG_PATTERN_HIGHLIGHTED"
@@ -33,20 +33,20 @@
 
     <!-- CONSOLE 어펜더 정의 -->
     <!-- 로컬 개발 환경에 적합 -->
-    <springProfile name="local">
-        <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
-            <encoder class="ch.qos.logback.classic.encoder.PatternLayoutEncoder">
-                <pattern>${LOG_PATTERN_HIGHLIGHTED}</pattern>
-            </encoder>
-        </appender>
-    </springProfile>
+    <!--    <springProfile name="local">-->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="ch.qos.logback.classic.encoder.PatternLayoutEncoder">
+            <pattern>${LOG_PATTERN_HIGHLIGHTED}</pattern>
+        </encoder>
+    </appender>
+    <!--    </springProfile>-->
 
 
     <!-- FILE 어펜더 정의 -->
     <!-- 운영 환경에 적합 -->
     <!-- 일자별로 로그 파일을 적재하되, 100MB를 초과하면 로그 파일 분할 -->
     <!-- 최대 7일치를 보관하고 나머지는 삭제, 최대 1GB를 초과해도 나머지를 삭제 -->
-    <if condition='!"${spring.profiles.active}".contains("dev")'>
+    <if condition='!"${spring.profiles.active}".contains("local")'>
         <then>
             <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
                 <!-- INFO 레벨 이상의 로그만 저장 -->
@@ -103,10 +103,10 @@
     <logger name="org.hibernate.type.descriptor.sql.BasicBinder" level="TRACE"/>
 
     <root level="${LOG_LEVEL}">
-        <springProfile name="local">
-            <appender-ref ref="CONSOLE"/>
-        </springProfile>
-        <if condition='!"${spring.profiles.active}".contains("dev")'>
+        <!--        <springProfile name="local">-->
+        <appender-ref ref="CONSOLE"/>
+        <!--        </springProfile>-->
+        <if condition='!"${spring.profiles.active}".contains("local")'>
             <then>
                 <appender-ref ref="FILE"/>
                 <appender-ref ref="ERROR_FILE"/>
