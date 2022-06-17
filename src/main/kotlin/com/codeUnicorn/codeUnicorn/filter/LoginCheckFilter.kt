@@ -6,17 +6,17 @@ import com.codeUnicorn.codeUnicorn.domain.user.User
 import com.codeUnicorn.codeUnicorn.exception.UserAccessForbiddenException
 import com.codeUnicorn.codeUnicorn.exception.UserUnauthorizedException
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import mu.KotlinLogging
+import org.springframework.http.HttpStatus
+import org.springframework.http.MediaType
+import org.springframework.stereotype.Component
+import org.springframework.util.PatternMatchUtils
 import javax.servlet.Filter
 import javax.servlet.FilterChain
 import javax.servlet.ServletRequest
 import javax.servlet.ServletResponse
 import javax.servlet.http.HttpServletRequest
 import javax.servlet.http.HttpServletResponse
-import mu.KotlinLogging
-import org.springframework.http.HttpStatus
-import org.springframework.http.MediaType
-import org.springframework.stereotype.Component
-import org.springframework.util.PatternMatchUtils
 
 private val log = KotlinLogging.logger {}
 
@@ -72,7 +72,7 @@ class LoginCheckFilter : Filter {
             httpResponse.characterEncoding = "UTF-8"
             // ErrorResponse
             val errorResponse = ErrorResponse().apply {
-                this.status = HttpStatus.UNAUTHORIZED.value().toString()
+                this.status = HttpStatus.UNAUTHORIZED.value()
                 this.message = e.message.toString()
                 this.method = request.method
                 this.path = request.requestURI.toString()
@@ -84,7 +84,7 @@ class LoginCheckFilter : Filter {
             httpResponse.characterEncoding = "UTF-8"
             // ErrorResponse
             val errorResponse = ErrorResponse().apply {
-                this.status = HttpStatus.FORBIDDEN.value().toString()
+                this.status = HttpStatus.FORBIDDEN.value()
                 this.message = e.message.toString()
                 this.method = request.method
                 this.path = request.requestURI.toString()

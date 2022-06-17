@@ -1,33 +1,49 @@
-package com.codeUnicorn.codeUnicorn.domain.lecture
+package com.codeUnicorn.codeUnicorn.domain.course
 
-import com.codeUnicorn.codeUnicorn.domain.course.PlayTimeConverter
-import com.codeUnicorn.codeUnicorn.domain.section.SectionDetailInfo
+import com.fasterxml.jackson.annotation.JsonIgnore
 import javax.persistence.AttributeConverter
+import javax.persistence.Column
 import javax.persistence.Convert
 import javax.persistence.Converter
 import javax.persistence.Entity
 import javax.persistence.GeneratedValue
 import javax.persistence.GenerationType
 import javax.persistence.Id
-import javax.persistence.ManyToOne
+import javax.persistence.OneToMany
 import javax.persistence.Table
+
+@Entity
+@Table(name = "section")
+@Convert(converter = PlayTimeConverter::class, attributeName = "totalHours")
+class SectionInfo(val name: String, val totalHours: String, val lectureCount: Int) {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    val id: Int? = null
+
+    @Column(name = "course_id")
+    @JsonIgnore
+    val courseId: Int? = null
+
+    @OneToMany(mappedBy = "sectionId")
+    val lectures: MutableList<LectureInfo> = mutableListOf()
+}
 
 @Entity
 @Table(name = "lecture")
 @Convert(converter = PlayTimeConverter::class, attributeName = "playTime")
-data class LectureDetailInfo(
-    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
-    val id: Int? = null,
-    var name: String,
-    var description: String,
-    // @Column(length = 255, name = "video_url")
-    var videoUrl: String,
-    // @Column(name = "play_time")
-    var playTime: String,
+class LectureInfo(val name: String, val description: String, val videoUrl: String, var playTime: String = "") {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    val id: Int? = null
 
-    @ManyToOne
-    val section: SectionDetailInfo
-)
+    @Column(name = "course_id")
+    @JsonIgnore
+    val courseId: Int? = null
+
+    @Column(name = "section_id")
+    @JsonIgnore
+    val sectionId: Int? = null
+}
 
 @Converter
 class PlayTimeConverter : AttributeConverter<String, Int> {

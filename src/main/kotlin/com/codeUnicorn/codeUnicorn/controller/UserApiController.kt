@@ -6,7 +6,7 @@ import com.codeUnicorn.codeUnicorn.domain.SuccessResponse
 import com.codeUnicorn.codeUnicorn.domain.user.User
 import com.codeUnicorn.codeUnicorn.dto.RequestUserDto
 import com.codeUnicorn.codeUnicorn.dto.UpdateNicknameUserDto
-import com.codeUnicorn.codeUnicorn.exception.FileNotExistException
+import com.codeUnicorn.codeUnicorn.exception.NotSupportedContentTypeException
 import com.codeUnicorn.codeUnicorn.service.S3FileUploadService
 import com.codeUnicorn.codeUnicorn.service.UserService
 import java.time.LocalDateTime
@@ -52,12 +52,7 @@ class UserApiController { // 의존성 주입
         userId: String
     ): ResponseEntity<Any> {
         val user: User = userService.getUserInfo(Integer.parseInt(userId))
-        // 응답해 줄 userInfo 데이터 가공
-        val userInfo: MutableMap<String, String?> = mutableMapOf<String, String?>()
-        userInfo["id"] = user.id.toString()
-        userInfo["nickname"] = user.nickname
-        userInfo["profilePath"] = user.profilePath
-        val successResponse = SuccessResponse(200, userInfo)
+        val successResponse = SuccessResponse(200, user)
 
         return ResponseEntity.status(HttpStatus.OK).body(successResponse)
     }
@@ -70,13 +65,23 @@ class UserApiController { // 의존성 주입
         request: HttpServletRequest,
         response: HttpServletResponse
     ): ResponseEntity<SuccessResponse> {
+        if (request.contentType != "application/json") {
+            throw NotSupportedContentTypeException(ExceptionMessage.CONTENT_TYPE_NOT_SUPPORTED)
+        }
         // 각각 회원가입 || 로그인, 사용자 데이터 리턴
         val result: MutableMap<String, Any> = userService.login(requestUserDto, request, response)
+        val user: User = result["user"] as User
+        // 응답해 줄 userInfo 데이터 가공
+        val userInfo: MutableMap<String, Any?> = mutableMapOf<String, Any?>()
+        userInfo["id"] = user.id
+        userInfo["nickname"] = user.nickname
+        userInfo["profilePath"] = user.profilePath
+        val successResponse = SuccessResponse(200, userInfo)
 
         if (result["type"] == "회원가입") {
-            return ResponseEntity.status(HttpStatus.CREATED).build()
+            return ResponseEntity.status(HttpStatus.CREATED).body(successResponse)
         }
-        return ResponseEntity.status(HttpStatus.OK).build()
+        return ResponseEntity.status(HttpStatus.OK).body(successResponse)
     }
 
     // 사용자 로그아웃 API
@@ -93,7 +98,7 @@ class UserApiController { // 의존성 주입
         // 세션 정보 존재하지 않은 경우 예외 처리
         if (session == null) {
             val errorResponse = ErrorResponse().apply {
-                this.status = HttpStatus.NOT_FOUND.value().toString()
+                this.status = HttpStatus.NOT_FOUND.value()
                 this.message = "세션 정보가 존재하지 않습니다."
                 this.method = request.method
                 this.path = request.requestURI.toString()
@@ -107,36 +112,36 @@ class UserApiController { // 의존성 주입
         return ResponseEntity.status(HttpStatus.OK).body(session)
     }
 
-    // 사용자 닉네임 업데이트
-    @PatchMapping("/{userId}/nickname")
-    fun updateNickname(
+    // 사용자 닉네임 및 프로필 업데이트
+    @PatchMapping("/{userId}/info")
+    fun updateUserInfo(
         request: HttpServletRequest,
         @PathVariable(value = "userId")
         @Pattern(regexp = "^(0|[1-9][0-9]*)$", message = "userId는 숫자만 가능합니다.")
-        userId: String?,
+        userId: String,
         @Valid
-        @RequestBody
-        updateNicknameUserDto: UpdateNicknameUserDto
-    ): ResponseEntity<Any> {
-        userService.updateNickname(Integer.parseInt(userId), updateNicknameUserDto.getNickname())
-
-        // 204 응답
-        return ResponseEntity.noContent().build()
-    }
-
-    // 사용자 프로필 설정
-    @PatchMapping("/{userId}/profile")
-    fun updateUserProfile(
-        @PathVariable(value = "userId")
-        @Pattern(regexp = "^(0|[1-9][0-9]*)$", message = "userId는 숫자만 가능합니다.")
-        userId: String?,
+        @RequestParam("nickname")
+        updateNicknameUserDto: UpdateNicknameUserDto?,
         @RequestParam("image")
         file: MultipartFile?
     ): ResponseEntity<Any> {
-        // S3 스토리지에 사용자 프로필 이미지 업로드
-        val profilePath = if (file != null) s3FileUploadService.uploadFile(file) else throw FileNotExistException(ExceptionMessage.FILE_NOT_EXIST)
-        // 사용자 테이블에 프로필 경로 정보 업데이트
-        userService.updateUserProfile(Integer.parseInt(userId), profilePath)
-        return ResponseEntity.noContent().build()
+        if (request.contentType != "multipart/form-data") {
+            throw NotSupportedContentTypeException(ExceptionMessage.CONTENT_TYPE_NOT_SUPPORTED)
+        }
+        // request.body 데이터로 nickname 데이터가 들어올 수도 안 들어올 수도 있다.
+        if (updateNicknameUserDto?.getNickname() != null) {
+            // 닉네임 업데이트
+            userService.updateNickname(Integer.parseInt(userId), updateNicknameUserDto.getNickname() ?: "")
+        }
+        if (file != null) {
+            // S3 스토리지에 사용자 프로필 이미지 업로드
+            val profilePath = s3FileUploadService.uploadFile(file)
+            // 사용자 테이블에 프로필 경로 정보 업데이트
+            userService.updateUserProfile(Integer.parseInt(userId), profilePath)
+        }
+        val user: User = userService.getUserInfo(Integer.parseInt(userId))
+        val successResponse = SuccessResponse(200, user)
+
+        return ResponseEntity.status(HttpStatus.OK).body(successResponse)
     }
 }

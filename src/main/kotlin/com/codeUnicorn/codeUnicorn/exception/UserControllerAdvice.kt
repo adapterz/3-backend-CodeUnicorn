@@ -38,7 +38,7 @@ class UserControllerAdvice {
         }
         // ErrorResponse
         val errorResponse = ErrorResponse().apply {
-            this.status = HttpStatus.BAD_REQUEST.value().toString()
+            this.status = HttpStatus.BAD_REQUEST.value()
             this.message = errors[0].message ?: "요청에 에러가 발생했습니다."
             this.method = request.method
             this.path = request.requestURI.toString()
@@ -61,7 +61,7 @@ class UserControllerAdvice {
         }
         // ErrorResponse
         val errorResponse = ErrorResponse().apply {
-            this.status = HttpStatus.BAD_REQUEST.value().toString()
+            this.status = HttpStatus.BAD_REQUEST.value()
             this.message = errors[0].message.toString()
             this.method = request.method.toString()
             this.path = request.requestURI.toString()
@@ -78,7 +78,7 @@ class UserControllerAdvice {
     ): ResponseEntity<ErrorResponse> {
         // ErrorResponse
         val errorResponse = ErrorResponse().apply {
-            this.status = HttpStatus.NOT_FOUND.value().toString()
+            this.status = HttpStatus.NOT_FOUND.value()
             this.message = e.message.toString()
             this.method = request.method
             this.path = request.requestURI.toString()
@@ -95,7 +95,7 @@ class UserControllerAdvice {
     ): ResponseEntity<ErrorResponse> {
         // ErrorResponse
         val errorResponse = ErrorResponse().apply {
-            this.status = HttpStatus.NOT_FOUND.value().toString()
+            this.status = HttpStatus.NOT_FOUND.value()
             this.message = e.message.toString()
             this.method = request.method
             this.path = request.requestURI.toString()
@@ -111,7 +111,7 @@ class UserControllerAdvice {
     ): ResponseEntity<ErrorResponse> {
         // ErrorResponse
         val errorResponse = ErrorResponse().apply {
-            this.status = HttpStatus.CONFLICT.value().toString()
+            this.status = HttpStatus.CONFLICT.value()
             this.message = e.message.toString()
             this.method = request.method
             this.path = request.requestURI.toString()
@@ -128,7 +128,7 @@ class UserControllerAdvice {
     ): ResponseEntity<ErrorResponse> {
         // ErrorResponse
         val errorResponse = ErrorResponse().apply {
-            this.status = HttpStatus.BAD_REQUEST.value().toString()
+            this.status = HttpStatus.BAD_REQUEST.value()
             this.message = e.message.toString()
             this.method = request.method
             this.path = request.requestURI.toString()
@@ -145,7 +145,7 @@ class UserControllerAdvice {
     ): ResponseEntity<ErrorResponse> {
         // ErrorResponse
         val errorResponse = ErrorResponse().apply {
-            this.status = HttpStatus.BAD_REQUEST.value().toString()
+            this.status = HttpStatus.BAD_REQUEST.value()
             this.message = e.message.toString()
             this.method = request.method
             this.path = request.requestURI.toString()
@@ -162,7 +162,7 @@ class UserControllerAdvice {
     ): ResponseEntity<ErrorResponse> {
         // ErrorResponse
         val errorResponse = ErrorResponse().apply {
-            this.status = HttpStatus.BAD_REQUEST.value().toString()
+            this.status = HttpStatus.BAD_REQUEST.value()
             this.message = ExceptionMessage.FILE_MAX_SIZE_EXCEEDED
             this.method = request.method
             this.path = request.requestURI.toString()
@@ -179,12 +179,29 @@ class UserControllerAdvice {
     ): ResponseEntity<ErrorResponse> {
         // Error Response
         val errorResponse = ErrorResponse().apply {
-            this.status = HttpStatus.INTERNAL_SERVER_ERROR.value().toString()
+            this.status = HttpStatus.INTERNAL_SERVER_ERROR.value()
             this.message = e.message.toString()
             this.method = request.method
             this.path = request.requestURI.toString()
         }
         // ResponseEntity
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse)
+    }
+
+    // 지원하지 않는 콘텐츠 형식
+    @ExceptionHandler(value = [NotSupportedContentTypeException::class])
+    fun handleNotSupportedContentTypeException(
+        e: NotSupportedContentTypeException,
+        request: HttpServletRequest
+    ): ResponseEntity<ErrorResponse> {
+        // Error Response
+        val errorResponse = ErrorResponse().apply {
+            this.status = HttpStatus.UNSUPPORTED_MEDIA_TYPE.value()
+            this.message = e.message.toString()
+            this.method = request.method
+            this.path = request.requestURI.toString()
+        }
+        // ResponseEntity
+        return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE).body(errorResponse)
     }
 }
