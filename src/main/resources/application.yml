@@ -1,7 +1,15 @@
 server:
-    port: 80
+    port: 443
     tomcat:
         uri-encoding: UTF-8
+    servelet:
+        session:
+            cookie:
+                domain: codeunicorn.kr
+                path: /
+                secure: true
+                http-only: true
+                same-site: none
 spring:
     application:
         name: CODE_UNICORN
@@ -27,9 +35,6 @@ spring:
         store-type: jdbc
         jdbc:
             initialize-schema: always
-        cookie:
-            http-only: false
-            secure: false
 logging:
     org:
         hibernate:
