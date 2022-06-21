@@ -8,7 +8,7 @@ pipeline {
         imagename = 'xhfkd00/codeunicorn'
         registryCredential = 'dockerhub'
         dockerImage = ''
-        SLACK_CHANNEL = '#codeunicorn'
+        SLACK_CHANNEL = '#code-unicorn-log-alarm'
     }
 
     stages {
