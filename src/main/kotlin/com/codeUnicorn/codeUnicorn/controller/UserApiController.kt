@@ -26,10 +26,12 @@ import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
+import org.springframework.web.bind.annotation.RequestHeader
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.multipart.MultipartFile
+import org.springframework.web.multipart.MultipartHttpServletRequest
 
 private val log = KotlinLogging.logger {}
 
@@ -51,10 +53,26 @@ class UserApiController { // 의존성 주입
         @Pattern(regexp = "^(0|[1-9][0-9]*)$", message = "userId는 숫자만 가능합니다.")
         userId: String
     ): ResponseEntity<Any> {
-        val user: User = userService.getUserInfo(Integer.parseInt(userId))
-        val successResponse = SuccessResponse(200, user)
-
+        val userInfoFuture = userService.getUserInfo(Integer.parseInt(userId))
+        val userInfo = userInfoFuture.join()
+        val successResponse = SuccessResponse(200, userInfo)
         return ResponseEntity.status(HttpStatus.OK).body(successResponse)
+    }
+
+    // 사용자 회원가입 API
+    @PostMapping(path = ["/signup"])
+    fun signup(
+        // Request Body 데이터 유효성 검증
+        @Valid @RequestBody requestUserDto: RequestUserDto,
+        request: HttpServletRequest,
+        response: HttpServletResponse
+    ): ResponseEntity<SuccessResponse> {
+        if (request.contentType != "application/json") {
+            throw NotSupportedContentTypeException(ExceptionMessage.CONTENT_TYPE_NOT_SUPPORTED)
+        }
+        val userInfo: User = userService.signup(requestUserDto, request, response)
+        val successResponse = SuccessResponse(201, userInfo)
+        return ResponseEntity.status(HttpStatus.CREATED).body(successResponse)
     }
 
     // 사용자 로그인 API
@@ -68,19 +86,18 @@ class UserApiController { // 의존성 주입
         if (request.contentType != "application/json") {
             throw NotSupportedContentTypeException(ExceptionMessage.CONTENT_TYPE_NOT_SUPPORTED)
         }
-        // 각각 회원가입 || 로그인, 사용자 데이터 리턴
-        val result: MutableMap<String, Any> = userService.login(requestUserDto, request, response)
+        // 로그인한 사용자 데이터 리턴
+        val result: Map<String, Any> = userService.login(requestUserDto, request, response)
         val user: User = result["user"] as User
         // 응답해 줄 userInfo 데이터 가공
-        val userInfo: MutableMap<String, Any?> = mutableMapOf<String, Any?>()
-        userInfo["id"] = user.id
-        userInfo["nickname"] = user.nickname
-        userInfo["profilePath"] = user.profilePath
+        val userInfo: Map<String, Any?> = mapOf(
+            "id" to user.id,
+            "nickname" to user.nickname,
+            "profilePath" to user.profilePath,
+            "loginSessionId" to result["loginSessionId"]
+        )
         val successResponse = SuccessResponse(200, userInfo)
 
-        if (result["type"] == "회원가입") {
-            return ResponseEntity.status(HttpStatus.CREATED).body(successResponse)
-        }
         return ResponseEntity.status(HttpStatus.OK).body(successResponse)
     }
 
@@ -120,35 +137,55 @@ class UserApiController { // 의존성 주입
         @Pattern(regexp = "^(0|[1-9][0-9]*)$", message = "userId는 숫자만 가능합니다.")
         userId: String,
         @Valid
-        @RequestParam("nickname")
+        @RequestParam(value = "nickname", required = false)
         updateNicknameUserDto: UpdateNicknameUserDto?,
-        @RequestParam("image")
-        file: MultipartFile?
+        @RequestParam(value = "image", required = false)
+        file: MultipartFile?,
+        multipartRequest: MultipartHttpServletRequest,
+        @RequestHeader
+        requestHeader: Map<String, Any>
     ): ResponseEntity<Any> {
-        // Content-Type : multipart/form-data 가 아닐 때 예외 처리
-//        if (!request.contentType.contains("multipart/form-data")) {
-//            throw NotSupportedContentTypeException(ExceptionMessage.CONTENT_TYPE_NOT_SUPPORTED)
-//        }
-        // Content-Type : multipart/form-data 인데 nickname, file 값이 존재한다면
-        if (updateNicknameUserDto?.getNickname() == null && file != null && file.isEmpty) {
+        val nickname = multipartRequest.getParameter("nickname")
+        val profile = multipartRequest.getFile("image")
+        log.info { "request header : $requestHeader" }
+        log.info { "content-type : ${multipartRequest.contentType}" }
+        log.info { "nickname : ${multipartRequest.getParameter("nickname")}" }
+        log.info { "image : ${multipartRequest.getFile("image")?.originalFilename ?: ""}" }
+        // 데이터 검증
+        if (nickname == null && profile != null && profile.isEmpty) {
             throw NicknameOrProfileRequiredException(ExceptionMessage.NICKNAME_OR_PROFILE_REQUIRED)
         }
-        // request.body 데이터로 nickname 데이터가 들어올 수도 안 들어올 수도 있다.
-        if (updateNicknameUserDto?.getNickname() != null) {
-            log.info { "닉네임 업데이트" }
-            // 닉네임 업데이트
-            userService.updateNickname(Integer.parseInt(userId), updateNicknameUserDto.getNickname() ?: "")
-        }
-        if (file != null) {
-            log.info { "프로필 업데이트" }
-            // S3 스토리지에 사용자 프로필 이미지 업로드
-            val profilePath = s3FileUploadService.uploadFile(file)
-            // 사용자 테이블에 프로필 경로 정보 업데이트
-            userService.updateUserProfile(Integer.parseInt(userId), profilePath)
-        }
-        val user: User = userService.getUserInfo(Integer.parseInt(userId))
-        val successResponse = SuccessResponse(200, user)
 
+        // request.body 데이터로 nickname 데이터가 들어올 수도 안 들어올 수도 있다.
+        if (nickname != null) {
+            log.info { "(컨트롤러) : 닉네임 데이터만 존재함" }
+            log.info { "(컨트롤러) : 닉네임 데이터 업데이트" }
+            // 닉네임 업데이트
+            val nicknameUpdateFuture = userService.updateNickname(
+                Integer.parseInt(userId),
+                nickname
+            )
+            nicknameUpdateFuture.join()
+            log.info { "(컨트롤러) : 닉네임 데이터 업데이트 완료" }
+        }
+        if (profile != null) {
+            log.info { "(컨트롤러) : 프로필 이미지 데이터만 존재함" }
+            log.info { "(컨트롤러) : 프로필 이미지 데이터 S3 스토리지에 업로드" }
+            // S3 스토리지에 사용자 프로필 이미지 업로드
+            val fileUploadFuture = s3FileUploadService.uploadFile(profile)
+            val fileUploadResult = fileUploadFuture.join()
+            log.info { "(컨트롤러) : 프로필 이미지 데이터 S3 스토리지 업로드 완료" }
+            log.info { "(컨트롤러) : 프로필 이미지 경로 사용자 정보 업데이트" }
+            // 사용자 테이블에 프로필 경로 정보 업데이트
+            val userProfileUpdateFuture = userService.updateUserProfile(Integer.parseInt(userId), fileUploadResult)
+            userProfileUpdateFuture.join()
+            log.info { "(컨트롤러) : 프로필 이미지 경로 사용자 정보 업데이트 완료" }
+        }
+        log.info { "(컨트롤러) : 업데이트된 사용자 정보 조회" }
+        val userInfoFuture = userService.getUserInfo(Integer.parseInt(userId))
+        val userInfo = userInfoFuture.join()
+        log.info { "(컨트롤러) : 업데이트된 사용자 정보 조회 완료" }
+        val successResponse = SuccessResponse(200, userInfo)
         return ResponseEntity.status(HttpStatus.OK).body(successResponse)
     }
 }

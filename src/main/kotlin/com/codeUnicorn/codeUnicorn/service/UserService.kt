@@ -2,7 +2,6 @@ package com.codeUnicorn.codeUnicorn.service
 
 import com.codeUnicorn.codeUnicorn.constant.BEHAVIOR_TYPE
 import com.codeUnicorn.codeUnicorn.constant.ExceptionMessage
-import com.codeUnicorn.codeUnicorn.constant.PLATFORM_TYPE
 import com.codeUnicorn.codeUnicorn.domain.user.User
 import com.codeUnicorn.codeUnicorn.domain.user.UserAccessLog
 import com.codeUnicorn.codeUnicorn.domain.user.UserAccessLogRepository
@@ -12,8 +11,11 @@ import com.codeUnicorn.codeUnicorn.dto.RequestUserDto
 import com.codeUnicorn.codeUnicorn.dto.UserAccessLogDto
 import com.codeUnicorn.codeUnicorn.exception.NicknameAlreadyExistException
 import com.codeUnicorn.codeUnicorn.exception.SessionNotExistException
+import com.codeUnicorn.codeUnicorn.exception.UserAlreadyExistException
 import com.codeUnicorn.codeUnicorn.exception.UserNotExistException
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import java.time.LocalDateTime
+import java.util.concurrent.CompletableFuture
 import javax.servlet.http.HttpServletRequest
 import javax.servlet.http.HttpServletResponse
 import javax.servlet.http.HttpSession
@@ -21,7 +23,7 @@ import javax.transaction.Transactional
 import mu.KotlinLogging
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.data.repository.findByIdOrNull
-import org.springframework.http.ResponseCookie
+import org.springframework.scheduling.annotation.Async
 import org.springframework.stereotype.Service
 
 private val log = KotlinLogging.logger {}
@@ -34,11 +36,50 @@ class UserService {
     @Autowired
     private lateinit var userAccessLogRepository: UserAccessLogRepository
 
+    @Async
     @Throws(UserNotExistException::class)
-    fun getUserInfo(userId: Int): User {
-        // 사용자 정보가 존재하지 않을 시 UserNotExistException 예외 발생
-        return userRepository.findByIdOrNull(userId)
-            ?: throw UserNotExistException(ExceptionMessage.RESOURCE_NOT_EXIST)
+    fun getUserInfo(userId: Int): CompletableFuture<User> {
+        log.info { "(서비스) : 사용자 정보 조회 쿼리" }
+        val userInfoFuture = CompletableFuture.supplyAsync(fun(): User? {
+            return userRepository.findByIdOrNull(userId)
+        })
+        val userInfo = userInfoFuture.join() ?: throw UserNotExistException(ExceptionMessage.RESOURCE_NOT_EXIST)
+        log.info { "(서비스) : 사용자 정보 조회 완료" }
+        return CompletableFuture.completedFuture(userInfo)
+    }
+
+    @Throws(UserAlreadyExistException::class)
+    fun signup(
+        requestUserDto: RequestUserDto,
+        request: HttpServletRequest,
+        response: HttpServletResponse
+    ): User {
+        val (email, nickname) = requestUserDto
+        // request body의 email 값에 따라 platformType 결정
+        val platformType = email.slice((email.indexOf("@") + 1) until email.indexOf("."))
+        // 이메일로 사용자 존재 여부 파악
+        if (userRepository.findByEmail(email) != null) {
+            throw UserAlreadyExistException(ExceptionMessage.USER_ALREADY_EXIST)
+        }
+
+        // 회원가입 사용자의 브라우저 정보 및 IP 주소 정보 수집
+        val browserName: String = this.getBrowserInfo(request)
+        val ip: String = this.getClientIp(request)
+        val defaultProfilePath = "https://api.codeunicorn.kr/static/user_default_profile.png"
+        // DB 에 저장할 사용자 정보 DTO 생성
+        val newUserDto =
+            CreateUserDto(
+                email,
+                nickname,
+                platformType,
+                defaultProfilePath,
+                ip,
+                browserName
+            )
+        // 사용자 정보 DTO => 사용자 정보 엔티티로 변환
+        val user = newUserDto.toEntity()
+        userRepository.save(user) // 회원 정보 DB에 저장
+        return user
     }
 
     // 리턴 값 : { "type": "로그인" || "회원가입", "data": { 사용자 정보 } }
@@ -47,69 +88,28 @@ class UserService {
         requestUserDto: RequestUserDto,
         request: HttpServletRequest,
         response: HttpServletResponse
-    ): MutableMap<String, Any> {
-        var platformType = ""
-        val returnData: MutableMap<String, Any> = mutableMapOf()
+    ): Map<String, Any> {
         val (email) = requestUserDto
 
         // 이메일로 사용자 존재 여부 파악
-        val userInfoInDb: User? = userRepository.findByEmail(email)
+        val userInfoInDb: User = userRepository.findByEmail(email)
+            ?: throw UserNotExistException(ExceptionMessage.RESOURCE_NOT_EXIST)
 
-        val user: User
-
-        // 회원가입 처리
-        if (userInfoInDb == null) {
-            // request body의 email 값에 따라 platformType 결정
-            if (email.contains("naver")) {
-                platformType = PLATFORM_TYPE.NAVER.toString()
-            } else if (email.contains("gmail")) {
-                platformType = PLATFORM_TYPE.GOOGLE.toString()
-            }
-
-            // 회원가입 사용자의 브라우저 정보 및 IP 주소 정보 수집
-            val browserName: String = this.getBrowserInfo(request)
-            val ip: String = this.getClientIp(request)
-            val defaultProfilePath = "/static/user_default_profile.png"
-            // DB 에 저장할 사용자 정보 DTO 생성
-            val newUserDto =
-                CreateUserDto(
-                    requestUserDto.email,
-                    requestUserDto.nickname,
-                    platformType,
-                    defaultProfilePath,
-                    ip,
-                    browserName
-                )
-            // 사용자 정보 DTO => 사용자 정보 엔티티로 변환
-            user = newUserDto.toEntity()
-            userRepository.save(user) // 회원 정보 DB에 저장
-
-            returnData["type"] = "회원가입"
-            // 로그인 처리
-        } else {
-
-            user = userInfoInDb
-
-            returnData["type"] = "로그인"
-        }
-        returnData["user"] = user
         // 세션 발급
         // 세션이 존재하지 않는 경우 신규 세션 발급
         val session: HttpSession = request.getSession(true)
         // 사용자 객체 데이터 변환 (Object to JSON string)
-        val userInfoForSession = jacksonObjectMapper().writeValueAsString(user)
+        val userInfoForSession = jacksonObjectMapper().writeValueAsString(userInfoInDb)
         // 세션에 로그인 회원 정보 보관
         session.setAttribute("user", userInfoForSession)
 
         // create a cookie
-        val loginCookie = ResponseCookie.from("loginSessionId", session.id)
-            .domain("codeunicorn.kr")
-            .sameSite("Strict")
-            .secure(true)
-            .path("/")
-            .maxAge(86400)
-            .build()
-        response.addHeader("set-cookie", loginCookie.toString())
+        val loginSessionId = session.id
+
+        val returnData = mapOf(
+            "user" to userInfoInDb,
+            "loginSessionId" to loginSessionId
+        )
 
         // 로그인 사용자의 브라우저 정보 및 IP 주소 정보 수집
         val browserName: String = this.getBrowserInfo(request)
@@ -118,7 +118,7 @@ class UserService {
         // 로그인 로그 쌓기
         val userAccessLog =
             UserAccessLogDto(
-                user.id ?: 0,
+                userInfoInDb.id ?: 0,
                 BEHAVIOR_TYPE.LOGIN.toString(),
                 ip,
                 browserName,
@@ -206,22 +206,43 @@ class UserService {
     }
 
     // 사용자 닉네임 업데이트
+    @Async
     @Transactional
-    fun updateNickname(userId: Int, nickname: String): Int? {
-        val userWithDuplicatedNickname: User? = userRepository.findByNickname(nickname)
+    fun updateNickname(userId: Int, nickname: String): CompletableFuture<Int?> {
+        log.info { "(서비스) : 닉네임 중복여부 체크" }
+        val nickDuplicatedCheckFuture = CompletableFuture.supplyAsync(fun(): User? {
+            log.info { "(서비스) : 닉네임 중복여부 조회 쿼리 날림" }
+            return userRepository.findByNickname(nickname)
+        })
+        val nickDuplicateCheckResult = nickDuplicatedCheckFuture.join()
 
-        // 중복되는 닉네임이 이미 존재하는 경우
-        if (userWithDuplicatedNickname != null) {
+        if (nickDuplicateCheckResult != null) {
+            log.info { "(서비스) : 닉네임 중복됨" }
             throw NicknameAlreadyExistException(ExceptionMessage.NICKNAME_ALREADY_EXIST)
         }
-
+        log.info { "(서비스) : 닉네임 중복여부 체크 통과" }
+        val updatedAt = LocalDateTime.now()
         // 중복되는 닉네임이 존재하지 않는 경우 사용자 닉네임 업데이트
-        return userRepository.updateNickname(userId, nickname)
+        val nicknameUpdateFuture = CompletableFuture.supplyAsync(fun(): Int? {
+            log.info { "(서비스) : 닉네임 업데이트 쿼리 날림" }
+            return userRepository.updateNickname(userId, nickname, updatedAt)
+        })
+        val nicknameUpdateResult = nicknameUpdateFuture.join()
+        log.info { "(서비스) : 닉네임 업데이트 완료" }
+        return CompletableFuture.completedFuture(nicknameUpdateResult)
     }
 
     // 사용자 프로필 업데이트
+    @Async
     @Transactional
-    fun updateUserProfile(userId: Int, profilePath: String) {
-        userRepository.updateProfile(userId, profilePath)
+    fun updateUserProfile(userId: Int, profilePath: String): CompletableFuture<Int?> {
+        val updatedAt = LocalDateTime.now()
+        val userProfileUpdateFuture = CompletableFuture.supplyAsync(fun(): Int? {
+            log.info { "(서비스) : 프로필 이미지 경로 사용자 정보 업데이트 쿼리 날림" }
+            return userRepository.updateProfile(userId, profilePath, updatedAt)
+        })
+        val userProfileUpdateResult = userProfileUpdateFuture.join()
+        log.info { "(서비스) : 프로필 이미지 경로 사용자 정보 업데이트 완료" }
+        return CompletableFuture.completedFuture(userProfileUpdateResult)
     }
 }
