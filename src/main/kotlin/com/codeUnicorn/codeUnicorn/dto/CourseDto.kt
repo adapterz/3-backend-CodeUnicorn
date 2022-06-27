@@ -1,3 +1,4 @@
+// ktlint-disable filename
 package com.codeUnicorn.codeUnicorn.dto
 
 import com.codeUnicorn.codeUnicorn.domain.likeCourse.LikeCourse
