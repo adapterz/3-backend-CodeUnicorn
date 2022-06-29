@@ -2,6 +2,9 @@ package com.codeUnicorn.codeUnicorn.service
 
 import com.codeUnicorn.codeUnicorn.constant.BEHAVIOR_TYPE
 import com.codeUnicorn.codeUnicorn.constant.ExceptionMessage
+import com.codeUnicorn.codeUnicorn.domain.course.AppliedCourse
+import com.codeUnicorn.codeUnicorn.domain.course.AppliedCourseRepository
+import com.codeUnicorn.codeUnicorn.domain.course.LikeCourseInfoRepository
 import com.codeUnicorn.codeUnicorn.domain.user.User
 import com.codeUnicorn.codeUnicorn.domain.user.UserAccessLog
 import com.codeUnicorn.codeUnicorn.domain.user.UserAccessLogRepository
@@ -9,22 +12,27 @@ import com.codeUnicorn.codeUnicorn.domain.user.UserRepository
 import com.codeUnicorn.codeUnicorn.dto.CreateUserDto
 import com.codeUnicorn.codeUnicorn.dto.RequestUserDto
 import com.codeUnicorn.codeUnicorn.dto.UserAccessLogDto
+import com.codeUnicorn.codeUnicorn.exception.AppliedCourseNotExistException
+import com.codeUnicorn.codeUnicorn.exception.LikeCourseNotExistException
+import com.codeUnicorn.codeUnicorn.exception.MySQLException
 import com.codeUnicorn.codeUnicorn.exception.NicknameAlreadyExistException
 import com.codeUnicorn.codeUnicorn.exception.SessionNotExistException
 import com.codeUnicorn.codeUnicorn.exception.UserAlreadyExistException
 import com.codeUnicorn.codeUnicorn.exception.UserNotExistException
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
-import java.time.LocalDateTime
-import java.util.concurrent.CompletableFuture
-import javax.servlet.http.HttpServletRequest
-import javax.servlet.http.HttpServletResponse
-import javax.servlet.http.HttpSession
-import javax.transaction.Transactional
 import mu.KotlinLogging
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.scheduling.annotation.Async
 import org.springframework.stereotype.Service
+import java.io.IOException
+import java.time.LocalDateTime
+import java.time.Period
+import java.util.concurrent.CompletableFuture
+import javax.servlet.http.HttpServletRequest
+import javax.servlet.http.HttpServletResponse
+import javax.servlet.http.HttpSession
+import javax.transaction.Transactional
 
 private val log = KotlinLogging.logger {}
 
@@ -36,6 +44,12 @@ class UserService {
     @Autowired
     private lateinit var userAccessLogRepository: UserAccessLogRepository
 
+    @Autowired
+    private lateinit var appliedCourseRepository: AppliedCourseRepository
+
+    @Autowired
+    private lateinit var likeCourseInfoRepository: LikeCourseInfoRepository
+
     @Async
     @Throws(UserNotExistException::class)
     fun getUserInfo(userId: Int): CompletableFuture<User> {
@@ -43,7 +57,8 @@ class UserService {
         val userInfoFuture = CompletableFuture.supplyAsync(fun(): User? {
             return userRepository.findByIdOrNull(userId)
         })
-        val userInfo = userInfoFuture.join() ?: throw UserNotExistException(ExceptionMessage.RESOURCE_NOT_EXIST)
+        val userInfo = userInfoFuture.join()
+        if (userInfo == null || userInfo.deletedAt != null) throw UserNotExistException(ExceptionMessage.RESOURCE_NOT_EXIST)
         log.info { "(서비스) : 사용자 정보 조회 완료" }
         return CompletableFuture.completedFuture(userInfo)
     }
@@ -138,11 +153,12 @@ class UserService {
         // 세션이 존재하지 않는 경우 예외 발생(404, 세션이 존재하지 않음)
         val session: HttpSession = request.getSession(false)
             ?: throw SessionNotExistException(ExceptionMessage.SESSION_NOT_EXIST)
-
+        log.info { "session: $session" }
         // 세션 속 저장되어 있는 사용자 정보 가져오기
         val userInfoInSession: User =
             jacksonObjectMapper().readValue(session.getAttribute("user").toString(), User::class.java)
         log.info { "userInfoInSession: $userInfoInSession" }
+        log.info { "id: ${userInfoInSession.id}" }
         // 세션 테이블에 저장된 세션 데이터 삭제됨.
         session.invalidate()
 
@@ -244,5 +260,89 @@ class UserService {
         val userProfileUpdateResult = userProfileUpdateFuture.join()
         log.info { "(서비스) : 프로필 이미지 경로 사용자 정보 업데이트 완료" }
         return CompletableFuture.completedFuture(userProfileUpdateResult)
+    }
+
+    // 회원 탈퇴
+    @Transactional
+    @Throws(MySQLException::class)
+    fun deleteUser(userId: Int) {
+        val deletedAt = LocalDateTime.now()
+        // 사용자의 deleted_at 컬럼 값 업데이트
+        try {
+            userRepository.deleteUser(userId, deletedAt)
+        } catch (e: IOException) {
+            throw MySQLException(ExceptionMessage.UPDATE_QUERY_FAIL)
+        }
+    }
+
+    // 사용자가 신청한 코스 목록 조회
+    @Throws(AppliedCourseNotExistException::class, MySQLException::class)
+    fun getAppliedList(userId: Int): MutableList<MutableMap<String, Any?>> {
+        var courseList: MutableList<AppliedCourse?>
+        try {
+            courseList = appliedCourseRepository.findByUserId(userId)
+        } catch (e: IOException) {
+            // 조회 쿼리 요청 중 실패 시
+            throw MySQLException(ExceptionMessage.SELECT_QUERY_FAIL)
+        }
+
+        // 사용자가 신청한 코스가 존재하지 않는 경우
+        if (courseList.size == 0) throw AppliedCourseNotExistException(ExceptionMessage.RESOURCE_NOT_EXIST)
+
+        val responseData = mutableListOf<MutableMap<String, Any?>>()
+        courseList.forEach(fun(it) {
+            val appliedCourseInfo = mutableMapOf<String, Any?>()
+            appliedCourseInfo["courseId"] = it?.course?.id
+            appliedCourseInfo["name"] = it?.course?.name
+            appliedCourseInfo["imagePath"] = it?.course?.imagePath
+            appliedCourseInfo["createdAt"] = it?.createdAt?.toLocalDate().toString().replace("-", ". ")
+            // dayCount 계산
+            val startDateTime = it?.createdAt?.toLocalDate() ?: LocalDateTime.now().toLocalDate()
+            val currentDateTime = LocalDateTime.now().toLocalDate()
+            val period = Period.between(startDateTime, currentDateTime)
+            val years = period.years
+            val months = period.months
+            val days = period.days
+            val dayCount = years * 365 + months * 30 + days
+            appliedCourseInfo["dayCount"] = dayCount
+            responseData.add(appliedCourseInfo)
+        })
+
+        return responseData
+    }
+
+    // 사용자의 관심 코스 목록 조회
+    fun getLikeCourseList(userId: Int): HashMap<String, Any?> {
+
+        val likeCourseList = likeCourseInfoRepository.findByLikeCourseList(userId)
+
+        if (likeCourseList.isEmpty()) {
+            throw LikeCourseNotExistException(ExceptionMessage.RESOURCE_NOT_EXIST)
+        }
+
+        val likeCourseCount = likeCourseInfoRepository.findByLikeCourseCount(userId)
+
+        val likeCourseResponse = HashMap<String, Any?>()
+
+        val likeCourseData = mutableListOf<MutableMap<String, Any?>>()
+
+        for (i in likeCourseList.indices) {
+            val likeCourse = mutableMapOf<String, Any?>()
+            likeCourse["id"] = likeCourseList[i].likeCourseList.id
+            likeCourse["category"] = likeCourseList[i].likeCourseList.category
+            likeCourse["type"] = likeCourseList[i].likeCourseList.type
+            likeCourse["name"] = likeCourseList[i].likeCourseList.name
+            likeCourse["imagePath"] = likeCourseList[i].likeCourseList.imagePath
+            likeCourse["averageRatings"] = likeCourseList[i].likeCourseList.averageRatings
+            likeCourse["ratingsCount"] = likeCourseList[i].likeCourseList.ratingsCount
+            likeCourse["userCount"] = likeCourseList[i].likeCourseList.userCount
+
+            likeCourseData.add(likeCourse)
+        }
+
+        likeCourseResponse["courses"] = likeCourseData
+        likeCourseResponse["courseCount"] = likeCourseCount
+
+        return likeCourseResponse
     }
 }

@@ -7,26 +7,35 @@ import javax.persistence.Entity
 import javax.persistence.GeneratedValue
 import javax.persistence.GenerationType
 import javax.persistence.Id
+import javax.persistence.JoinColumn
+import javax.persistence.OneToOne
 import javax.persistence.Table
-import org.hibernate.annotations.CreationTimestamp
+import org.springframework.data.annotation.CreatedDate
 
 @Entity
 @Table(name = "applied_course")
 class AppliedCourse(userId: Int, courseId: Int) {
+    @JsonIgnore
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     val id: Int? = null
 
+    @JsonIgnore
     @Column(name = "user_id")
     var userId: Int? = userId
 
+    @JsonIgnore
     @Column(name = "course_id")
     var courseId: Int? = courseId
 
-    @JsonIgnore
+    @OneToOne
+    @JoinColumn(name = "course_id", referencedColumnName = "id", insertable = false, updatable = false)
+    val course: CourseInfo? = null
+
     @Column(name = "created_at")
-//    @JsonSerialize(using = LocalDateTimeSerializer::class)
-//    @JsonDeserialize(using = LocalDateTimeDeserializer::class)
-    @CreationTimestamp // insert 쿼리에 대해 자동으로 생성
+    @CreatedDate
     val createdAt: LocalDateTime = LocalDateTime.now()
+
+    @Transient
+    var dayCount: Int? = null
 }

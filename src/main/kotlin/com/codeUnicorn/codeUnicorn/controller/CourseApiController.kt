@@ -33,8 +33,7 @@ class CourseApiController {
         @RequestParam category: String,
         @RequestParam page: Int
     ): ResponseEntity<Any> {
-        var paging = 0
-        paging = if (page == 1 || page == 0) {
+        val paging = if (page == 1 || page == 0) {
             0
         } else {
             (page - 1) * 9
@@ -53,6 +52,7 @@ class CourseApiController {
         return ResponseEntity.status(HttpStatus.OK).body(successResponse)
     }
 
+    // 커리큘럼 정보 조회
     @GetMapping("/{courseId}/curriculum")
     fun getCourseCurriculum(
         @PathVariable(value = "courseId")
@@ -60,7 +60,7 @@ class CourseApiController {
         courseId: String,
         request: HttpServletRequest
     ): ResponseEntity<Any> {
-        val curriculumInfo: List<SectionInfo> = courseService.getCurriculumInfo(Integer.parseInt(courseId))
+        val curriculumInfo: List<SectionInfo?> = courseService.getCurriculumInfo(Integer.parseInt(courseId))
         val responseData = mapOf(
             "courseId" to Integer.parseInt(courseId),
             "sections" to curriculumInfo
@@ -71,7 +71,7 @@ class CourseApiController {
 
     // 코스 상세 정보 조회
     @GetMapping(path = ["/{courseId}"])
-    fun GetCourseDetail(
+    fun getCourseDetail(
         @PathVariable(value = "courseId")
         @Pattern(regexp = "^(0|[1-9][0-9]*)$", message = "courseId는 숫자만 가능합니다.")
         courseId: String
@@ -85,7 +85,7 @@ class CourseApiController {
 
     // 강의 상세 정보 조회
     @GetMapping(path = ["/{courseId}/lectures/{lectureId}"])
-    fun GetLectureInfo(
+    fun getLectureInfo(
         @PathVariable(value = "courseId")
         @Pattern(regexp = "^(0|[1-9][0-9]*)$", message = "courseId는 숫자만 가능합니다.")
         courseId: String,
@@ -115,7 +115,7 @@ class CourseApiController {
 
     // 전체 강의 정보 조회
     @GetMapping(path = ["/all"])
-    fun GetCourseAllList(): ResponseEntity<Any> {
+    fun getCourseAllList(): ResponseEntity<Any> {
 
         val category: String = "all"
 
@@ -137,14 +137,21 @@ class CourseApiController {
         courseId: String
     ): ResponseEntity<Any> {
 
-        println("API까지 접속")
-        println(courseId)
-        // println(request.session)
-
         val courseIdToInt = courseId.toInt()
 
         courseService.postCourseLike(request, courseIdToInt)
 
         return ResponseEntity.status(HttpStatus.NO_CONTENT).body(courseId)
+    }
+
+    @PostMapping(path = ["/{courseId}/apply"])
+    fun applyCourse(
+        @PathVariable(value = "courseId")
+        @Pattern(regexp = "^(0|[1-9][0-9]*)$", message = "courseId는 숫자만 가능합니다.")
+        courseId: String,
+        request: HttpServletRequest
+    ): ResponseEntity<SuccessResponse?> {
+        courseService.applyCourse(Integer.parseInt(courseId), request)
+        return ResponseEntity.status(HttpStatus.CREATED).body(null)
     }
 }
