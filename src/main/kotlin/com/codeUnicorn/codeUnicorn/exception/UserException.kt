@@ -11,4 +11,3 @@ class NicknameOrProfileRequiredException(message: String) : RuntimeException(mes
 class LikeCourseAlreadyExistException(message: String) : RuntimeException(message)
 class AppliedCourseNotExistException(message: String) : RuntimeException(message)
 class LikeCourseNotExistException(message: String) : RuntimeException(message)
-
