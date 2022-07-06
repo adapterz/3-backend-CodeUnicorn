@@ -1,6 +1,7 @@
 package com.codeUnicorn.codeUnicorn.controller
 
 import com.codeUnicorn.codeUnicorn.domain.SuccessResponse
+import com.codeUnicorn.codeUnicorn.domain.course.CourseInfo
 import com.codeUnicorn.codeUnicorn.domain.course.SectionInfo
 import com.codeUnicorn.codeUnicorn.service.CourseService
 import mu.KotlinLogging
@@ -43,9 +44,9 @@ class CourseApiController {
     ): ResponseEntity<Any> {
         val courseInfo = HashMap<String, Any>()
 
-        val courseList = courseService.getCourseList(category, sortBy, Integer.parseInt(page) ?: 0)
-        val courseListInfo = courseList?.toTypedArray()
-        courseListInfo?.let { courseInfo.put("courses", it) }
+        val courseList = courseService.getCourseList(category, sortBy, Integer.parseInt(page))
+        val courseListInfo = courseList.toTypedArray()
+        courseListInfo.let { courseInfo.put("courses", it) }
 
         val courseCount = courseService.getCourseCount(category)
         courseInfo["courseCount"] = courseCount
@@ -105,7 +106,10 @@ class CourseApiController {
         lecture.id?.let { lectureEdit.put("id", it) }
         lectureEdit["name"] = lecture.name
         lectureEdit["desc"] = lecture.description
-        lectureEdit["videoUrl"] = lecture.videoUrl
+        // Safari 아닌 다른 브라우저 전용 영상 스트리밍 URl
+        lectureEdit["dashUrl"] = lecture.dashUrl
+        // Safari 브라우저 전용 영상 스트리밍 URl
+        lectureEdit["hlsUrl"] = lecture.hlsUrl
         lectureEdit["playTime"] = lecture.playTime
 
         lectureInfo["sectionId"] = lecture.section.sectionId
@@ -168,5 +172,24 @@ class CourseApiController {
         courseService.deleteLikeCourse(request, Integer.parseInt(courseId))
 
         return ResponseEntity.status(HttpStatus.NO_CONTENT).body(null)
+    }
+
+    // 좋아요 수를 기준으로 TOP3 의 코스 정보 조회
+    @GetMapping(path = ["/top/3"])
+    fun getTopThreeCourses(): ResponseEntity<List<CourseInfo?>> {
+        val topThreeCourses = courseService.getTopThreeCourses()
+        return ResponseEntity.status(HttpStatus.OK).body(topThreeCourses)
+    }
+
+    // 코스 검색
+    @GetMapping(path = ["/search"])
+    fun getSearchCourse(
+        @RequestParam(required = true)
+        keyword: String?
+    ): ResponseEntity<Any> {
+
+        val courseInfo = courseService.getSearchCourse(keyword)
+
+        return ResponseEntity.status(HttpStatus.OK).body(courseInfo)
     }
 }

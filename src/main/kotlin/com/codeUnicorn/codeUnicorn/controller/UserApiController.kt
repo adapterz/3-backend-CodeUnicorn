@@ -10,6 +10,12 @@ import com.codeUnicorn.codeUnicorn.exception.NicknameOrProfileRequiredException
 import com.codeUnicorn.codeUnicorn.exception.NotSupportedContentTypeException
 import com.codeUnicorn.codeUnicorn.service.S3FileUploadService
 import com.codeUnicorn.codeUnicorn.service.UserService
+import java.time.LocalDateTime
+import javax.servlet.http.HttpServletRequest
+import javax.servlet.http.HttpServletResponse
+import javax.servlet.http.HttpSession
+import javax.validation.Valid
+import javax.validation.constraints.Pattern
 import mu.KotlinLogging
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.http.HttpStatus
@@ -20,17 +26,11 @@ import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
+import org.springframework.web.bind.annotation.RequestHeader
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.multipart.MultipartFile
-import org.springframework.web.multipart.MultipartHttpServletRequest
-import java.time.LocalDateTime
-import javax.servlet.http.HttpServletRequest
-import javax.servlet.http.HttpServletResponse
-import javax.servlet.http.HttpSession
-import javax.validation.Valid
-import javax.validation.constraints.Pattern
 
 private val log = KotlinLogging.logger {}
 
@@ -63,6 +63,13 @@ class UserApiController { // 의존성 주입
 
         // 세션 정보 제공
         return ResponseEntity.status(HttpStatus.OK).body(session)
+    }
+
+    // 모든 사용자 정보 조회 API
+    @GetMapping(path = ["/all"])
+    fun getUserInfoList(): ResponseEntity<MutableList<User?>> {
+        val userInfoList = userService.getUserInfoList()
+        return ResponseEntity.status(HttpStatus.OK).body(userInfoList)
     }
 
     // 사용자 정보 조회 API
@@ -132,24 +139,26 @@ class UserApiController { // 의존성 주입
     // 사용자 닉네임 및 프로필 업데이트
     @PostMapping("/{userId}/info")
     fun updateUserInfo(
+        request: HttpServletRequest,
         @PathVariable(value = "userId")
         @Pattern(regexp = "^(0|[1-9][0-9]*)$", message = "userId는 숫자만 가능합니다.")
         userId: String,
         @Valid
         @RequestParam(value = "nickname", required = false)
-        updateNicknameUserDto: UpdateNicknameUserDto?,
+        updateNicknameUserDto: UpdateNicknameUserDto,
         @RequestParam(value = "image", required = false)
         file: MultipartFile?,
-        multipartRequest: MultipartHttpServletRequest,
+        @RequestHeader
+        requestHeader: Map<String, Any>
     ): ResponseEntity<Any> {
-        val sessionInfo = multipartRequest.getSession(false)
-        log.info { "쿠키 정보: ${multipartRequest.getHeader("cookie")}" }
-        log.info { "세션 정보: ${sessionInfo.id}" }
+        val session = request.getSession(false)
+        log.info { "리퀘스트 헤더 정보: $requestHeader" }
+        log.info { "쿠키 정보: ${request.getHeader("cookie")}" }
+        log.info { "세션 정보: ${session.id}" }
 
-        val nickname = multipartRequest.getParameter("nickname")
-        val profile = multipartRequest.getFile("image")
+        val nickname = updateNicknameUserDto.getNickname()
         // 데이터 검증
-        if (nickname == null && profile != null && profile.isEmpty) {
+        if (nickname == null && file != null && file.isEmpty) {
             throw NicknameOrProfileRequiredException(ExceptionMessage.NICKNAME_OR_PROFILE_REQUIRED)
         }
 
@@ -162,9 +171,9 @@ class UserApiController { // 의존성 주입
             )
             nicknameUpdateFuture.join()
         }
-        if (profile != null) {
+        if (file != null) {
             // S3 스토리지에 사용자 프로필 이미지 업로드
-            val fileUploadFuture = s3FileUploadService.uploadFile(profile)
+            val fileUploadFuture = s3FileUploadService.uploadFile(file)
             val fileUploadResult = fileUploadFuture.join()
             // 사용자 테이블에 프로필 경로 정보 업데이트
             val userProfileUpdateFuture = userService.updateUserProfile(Integer.parseInt(userId), fileUploadResult)

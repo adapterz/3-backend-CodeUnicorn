@@ -29,6 +29,8 @@ import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import mu.KotlinLogging
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
+import java.io.IOException
 import java.time.LocalDateTime
 import javax.servlet.http.HttpServletRequest
 import javax.servlet.http.HttpSession
@@ -36,6 +38,7 @@ import javax.servlet.http.HttpSession
 private val log = KotlinLogging.logger {}
 
 @Service
+@Transactional
 class CourseService {
     @Autowired
     private lateinit var courseRepository: CourseInfoRepository
@@ -244,6 +247,7 @@ class CourseService {
         // 사용자 코스 신청 기록 저장
         val savedAppliedCourse = appliedCourseRepository.save(appliedCourse)
         log.info { "신청된 코스 정보 : $savedAppliedCourse" }
+        courseRepository.updateUserCount(courseId)
         return savedAppliedCourse
     }
 
@@ -263,5 +267,51 @@ class CourseService {
         val deletedAt = LocalDateTime.now()
 
         likeCourseDeleteRepository.deleteByLikeCourse(deletedAt, userId, courseId)
+    }
+
+    @Throws(MySQLException::class)
+    fun getTopThreeCourses(): List<CourseInfo?> {
+        var topThreeCourses: List<CourseInfo?>
+        try {
+            topThreeCourses = courseRepository.findTopThreeCourseList()
+        } catch (e: IOException) {
+            throw MySQLException(ExceptionMessage.SELECT_QUERY_FAIL)
+        }
+        return topThreeCourses
+    }
+
+    // 코스 검색
+    fun getSearchCourse(keyword: String?): Any {
+
+        // 키워드가 빈값이라면 모든 코스 조회로 연결
+        if (keyword?.isEmpty() == true) {
+            val courseList = courseRepository.findByAllCourseList()
+            val courseCount = courseRepository.findByAllCourseCount()
+
+            val courseInfo = HashMap<String, Any>()
+            courseInfo["courses"] = courseList
+            courseInfo["courseCount"] = courseCount
+            return courseInfo
+        }
+
+        // MYSQL like 문 사용하기 위하여 가공
+        val searchKeyword = "%$keyword%"
+        // 키워드로 코스 정보 조회
+        val courseList = courseRepository.findSearchCourse(searchKeyword)
+
+        // 코스 정보 조회가 빈 값이라면
+        if (courseList.isEmpty()) {
+            throw CourseNotExistException(ExceptionMessage.RESOURCE_NOT_EXIST)
+        }
+
+        // 키워드로 코스 갯수 조회
+        val courseCount = courseRepository.findSearchCourseCount(searchKeyword)
+
+        // 데이터 가공
+        val courseInfo = HashMap<String, Any>()
+        courseInfo["courses"] = courseList
+        courseInfo["courseCount"] = courseCount
+
+        return courseInfo
     }
 }
