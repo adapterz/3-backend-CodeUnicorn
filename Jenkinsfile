@@ -41,9 +41,9 @@ pipeline {
             echo 'Bulid Gradle'
             dir('.'){
                 sh """
-                cp /var/jenkins_home/slack-logback.yml /var/jenkins_home/workspace/CodeUnicon/src/main/resources/slack-logback.yml
-                cp /var/jenkins_home/keystore.p12 /var/jenkins_home/workspace/CodeUnicon/src/main/resources/keystore.p12
-                cp /var/jenkins_home/application-prod.yml /var/jenkins_home/workspace/CodeUnicon/src/main/resources/application-prod.yml
+                cp /var/jenkins_home/slack-logback.yml /var/jenkins_home/workspace/CodeUnicorn/src/main/resources/slack-logback.yml
+                cp /var/jenkins_home/keystore.p12 /var/jenkins_home/workspace/CodeUnicorn/src/main/resources/keystore.p12
+                cp /var/jenkins_home/application-prod.yml /var/jenkins_home/workspace/CodeUnicorn/src/main/resources/application-prod.yml
                 gradle clean build -x test
                 """
             }
