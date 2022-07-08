@@ -64,7 +64,7 @@ pipeline {
           steps {
             echo 'Bulid Docker'
             script {
-            dir('../CodeUnicon'){
+            dir('../CodeUnicorn'){
             // 생성된 도커 이미지가 있으면 삭제 후 빌드, 아니면 그냥 빌드
             sh """#!/bin/bash
             if [ -z "docker images | grep xhfkd00/codeunicorn:1.0" ]; then
@@ -94,7 +94,7 @@ pipeline {
           steps {
             echo 'Push Docker'
             script {
-            dir('../CodeUnicon'){
+            dir('../CodeUnicorn'){
             docker.withRegistry('', registryCredential) {
                     sh "docker push xhfkd00/codeunicorn:1.0"
                 }
