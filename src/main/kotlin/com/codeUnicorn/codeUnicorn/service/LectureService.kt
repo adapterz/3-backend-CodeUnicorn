@@ -6,8 +6,11 @@ import com.codeUnicorn.codeUnicorn.domain.lecture.LectureRepository
 import com.codeUnicorn.codeUnicorn.exception.LectureNotExistException
 import com.codeUnicorn.codeUnicorn.exception.MySQLException
 import java.io.IOException
+import mu.KotlinLogging
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.stereotype.Service
+
+private val log = KotlinLogging.logger {}
 
 @Service
 class LectureService {
@@ -21,7 +24,8 @@ class LectureService {
             // 전체 강의 목록 조회 쿼리 요청
             lectureList = lectureRepository.findAll()
         } catch (e: IOException) {
-            throw MySQLException(ExceptionMessage.SELECT_QUERY_FAIL)
+            log.error { "INTERNAL SERVER ERROR: ${e.message}" }
+            throw MySQLException(ExceptionMessage.INTERNAL_SERVER_ERROR)
         }
 
         // 전체 강의 목록 조회 결과 아무 데이터도 존재하지 않는 경우
