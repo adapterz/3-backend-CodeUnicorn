@@ -117,7 +117,7 @@ pipeline {
               echo 'SSH'
                 sshagent(['ubuntu']) {
 //                 sh 'ssh -o StrictHostKeyChecking=no ubuntu@ec2-13-124-26-116.ap-northeast-2.compute.amazonaws.com "sudo /home/ubuntu/continer.sh"' // 서버 스크립트 실행
-                    sh 'ssh -o StrictHostKeyChecking=no ubuntu@3.35.50.198 "sudo /home/ubuntu/continer.sh"' // 서버 스크립트 실행
+                    sh 'ssh -o StrictHostKeyChecking=no ubuntu@3.35.50.198 "sudo /home/ubuntu/continer.sh"' // 서버 스크립트 실행 도커 이미지 pull 및 run
                 }
            }
            post {
