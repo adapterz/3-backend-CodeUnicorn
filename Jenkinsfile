@@ -135,7 +135,7 @@ pipeline {
             steps {
                 echo 'SSH'
                     sshagent(['ubuntu']) {
-                        sh 'ssh -o StrictHostKeyChecking=no ubuntu@3.35.50.198 "sudo /home/ubuntu/docker-backup.sh"' // 서버 스크립트 실행
+                        sh 'ssh -o StrictHostKeyChecking=no ubuntu@3.35.50.198 "sudo /home/ubuntu/docker-backup.sh"' // 도커 이미지 백업 스크립트 실행
                     }
                 }
                 post {
