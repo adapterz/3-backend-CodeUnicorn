@@ -350,7 +350,7 @@ class UserService {
         courseList.forEach(fun(it) {
             val appliedCourseInfo = mutableMapOf<String, Any?>()
             appliedCourseInfo["category"] = it?.course?.category
-            appliedCourseInfo["courseId"] = it?.course?.id
+            appliedCourseInfo["id"] = it?.course?.id
             appliedCourseInfo["name"] = it?.course?.name
             appliedCourseInfo["imagePath"] = it?.course?.imagePath
             appliedCourseInfo["createdAt"] = it?.createdAt?.toLocalDate().toString().replace("-", ". ")
